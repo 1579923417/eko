@@ -1,6 +1,7 @@
 import { ExecutionLogger, LogOptions } from "@/utils/execution-logger";
-import { Workflow, WorkflowNode, NodeInput, NodeOutput, ExecutionContext, LLMProvider, WorkflowCallback } from "../types";
-import { EkoConfig } from "../types/eko.types";
+import { Workflow, WorkflowNode, NodeInput, ExecutionContext, LLMProvider, WorkflowCallback, WorkflowSummary } from "../types";
+import { EkoConfig, WorkflowResult } from "../types/eko.types";
+import { summarizeWorkflow } from "@/common/summarize-workflow";
 
 export class WorkflowImpl implements Workflow {
   abort?: boolean;
@@ -11,6 +12,7 @@ export class WorkflowImpl implements Workflow {
     public id: string,
     public name: string,
     private ekoConfig: EkoConfig,
+    private rawWorkflow: string,
     public description?: string,
     public nodes: WorkflowNode[] = [],
     public variables: Map<string, unknown> = new Map(),
@@ -33,7 +35,7 @@ export class WorkflowImpl implements Workflow {
     }
   }
 
-  async execute(callback?: WorkflowCallback): Promise<NodeOutput[]> {
+  async execute(callback?: WorkflowCallback): Promise<WorkflowResult> {
     if (!this.validateDAG()) {
       throw new Error("Invalid workflow: Contains circular dependencies");
     }
@@ -122,7 +124,26 @@ export class WorkflowImpl implements Workflow {
 
     callback && await callback.hooks.afterWorkflow?.(this, this.variables);
 
-    return terminalNodes.map(node => node.output);
+    let node_outputs = terminalNodes.map(node => node.output);
+    
+    let workflowSummary: WorkflowSummary | undefined;
+    if (this.llmProvider) {
+      workflowSummary = await summarizeWorkflow(this.llmProvider, this, this.variables, node_outputs);
+    } else {
+      console.warn("WorkflowImpl.llmProvider is undefined, cannot generate workflow summary");
+    }
+    
+    // Special context variables
+    console.log("debug special context variables...");
+
+    const workflowTranscript = this.variables.get("workflow_transcript") as string | undefined;
+    console.log(workflowTranscript);
+
+    return {
+      isSuccessful: workflowSummary?.isSuccessful,
+      summary: workflowSummary?.summary,
+      payload: workflowTranscript,
+    };
   }
 
   addNode(node: WorkflowNode): void {
@@ -187,5 +208,9 @@ export class WorkflowImpl implements Workflow {
     };
 
     return !this.nodes.some(node => hasCycle(node.id));
+  }
+
+  public getRawWorkflowJson(): string {
+    return this.rawWorkflow;
   }
 }

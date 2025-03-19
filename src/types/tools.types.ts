@@ -154,6 +154,21 @@ export interface HumanOperateResult {
   userOperation: string,
 }
 
-export interface SummaryWorkflowInput {
+export interface WorkflowSummary {
+  isSuccessful: boolean,
   summary: string,
+}
+
+export interface DocumentAgentToolInput {
+  type: string,
+  title: string,
+  background: string,
+  keypoints: string,
+  style?: string,
+  references?: any,
+}
+
+export interface DocumentAgentToolOutput {
+  status: string,
+  content: string,
 }
