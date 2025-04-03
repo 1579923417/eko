@@ -94,6 +94,7 @@ export class BrowserUse implements Tool<BrowserUseParam, BrowserUseResult> {
         return { success: false, error: 'Could not access browser tab' };
       }
       let windowId = await getWindowId(context);
+      console.log("获取windowId:", windowId);
       let selector_map = context.selector_map;
       let selector_xpath;
       if (params.index != null && selector_map) {
@@ -179,24 +180,37 @@ export class BrowserUse implements Tool<BrowserUseParam, BrowserUseResult> {
           );
           break;
         case 'screenshot_extract_element':
-          console.log("execute 'screenshot_extract_element'...");
+          console.log("开始执行 'screenshot_extract_element' 操作...");
           await sleep(100);
-          console.log("injectScript...");
+          console.log("准备注入 build_dom_tree.js 脚本...");
           await injectScript(context.ekoConfig.chromeProxy, tabId, 'build_dom_tree.js');
           await sleep(100);
-          console.log("executeScript...");
+          console.log("脚本注入完成，开始执行 get_clickable_elements...");
           let element_result = await executeScript(context.ekoConfig.chromeProxy, tabId, () => {
+            console.log("正在执行 get_clickable_elements 函数...");
             return (window as any).get_clickable_elements(true);
           }, []);
+          console.log("get_clickable_elements 执行完成，获取到元素数量:", Object.keys(element_result.selector_map || {}).length);
           context.selector_map = element_result.selector_map;
-          console.log("browser.screenshot...");
+          console.log("开始执行页面截图...");
+          console.log("截图参数:", {
+            'chromeProxy': context.ekoConfig.chromeProxy,
+            'windowId': windowId,
+            'compress': true
+          });
           let screenshot = await browser.screenshot(context.ekoConfig.chromeProxy, windowId, true);
-          console.log("executeScript #2...");
-          await executeScript(context.ekoConfig.chromeProxy, tabId, () => {
-            return (window as any).remove_highlight();
-          }, []);
+          console.log("页面截图完成，开始移除高亮元素...");
+          try {
+            await executeScript(context.ekoConfig.chromeProxy, tabId, () => {
+              console.log("正在执行 remove_highlight 函数...");
+              return (window as any).remove_highlight();
+            }, []);
+            console.log("高亮元素移除完成");
+          } catch (error) {
+            console.error("移除高亮元素时发生错误:", error);
+          }
           result = { image: screenshot.image, text: element_result.element_str };
-          console.log("execute 'screenshot_extract_element'...done");
+          console.log("'screenshot_extract_element' 操作执行完成");
           break;
         default:
           throw Error(

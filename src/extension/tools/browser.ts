@@ -308,21 +308,29 @@ export async function double_click_by(
 
 export async function screenshot(chromeProxy: any, windowId: number, compress?: boolean): Promise<ScreenshotResult> {
   console.log('Taking screenshot of window:', windowId, { compress });
+  console.log('开始执行截图操作，窗口ID:', windowId, '是否压缩:', compress);
   try {
     let dataUrl;
     if (compress) {
+      console.log('使用压缩模式进行截图，图片质量设置为60...');
       dataUrl = await chromeProxy.tabs.captureVisibleTab(windowId as number, {
         format: 'jpeg',
         quality: 60, // 0-100
       });
+      console.log('原始截图完成，开始压缩图片...');
       dataUrl = await compress_image(dataUrl, 0.7, 1);
+      console.log('图片压缩完成');
     } else {
+      console.log('使用普通模式进行截图，图片质量设置为50...');
       dataUrl = await chromeProxy.tabs.captureVisibleTab(windowId as number, {
         format: 'jpeg',
         quality: 50,
       });
+      console.log('普通模式截图完成');
     }
+    console.log('开始处理base64图片数据...');
     let data = dataUrl.substring(dataUrl.indexOf('base64,') + 7);
+    console.log('base64数据处理完成，数据长度:', data.length);
     const result = {
       image: {
         type: 'base64',
@@ -344,28 +352,40 @@ export async function compress_image(
   quality: number = 0.8
 ): Promise<string> {
   console.log('Compressing image', { scale, quality });
+  console.log('开始压缩图片，参数:', { scale, quality });
   try {
+    console.log('开始获取图片数据，dataUrl长度:', dataUrl.length);
     const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+    console.log('原始图片尺寸:', { width: bitmap.width, height: bitmap.height });
     let width = bitmap.width * scale;
     let height = bitmap.height * scale;
+    console.log('计算压缩后尺寸:', { width, height });
+    console.log('创建 OffscreenCanvas...');
     const canvas = new OffscreenCanvas(width, height);
     const ctx = canvas.getContext('2d') as any;
+    console.log('开始绘制压缩后的图片...');
     ctx.drawImage(bitmap, 0, 0, width, height);
+    console.log('图片绘制完成，开始转换为 Blob...');
     const blob = await canvas.convertToBlob({
       type: 'image/jpeg',
       quality: quality,
     });
+    console.log('Blob 转换完成，Blob大小:', blob.size);
+    console.log('Blob 转换完成，开始读取为 base64...');
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
         console.log('Got compressed image result:', result);
+        console.log('图片压缩完成，数据长度:', result.length);
+        console.log('压缩比例:', (result.length / dataUrl.length * 100).toFixed(2) + '%');
         resolve(result);
       };
       reader.readAsDataURL(blob);
     });
   } catch (e) {
     console.error('Failed to compress image:', e);
+    console.error('图片压缩过程中发生错误:', e);
     throw e;
   }
 }
